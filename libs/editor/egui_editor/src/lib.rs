@@ -16,6 +16,7 @@ pub mod editor;
 pub mod galleys;
 pub mod images;
 pub mod input;
+pub mod java_ffi;
 pub mod layouts;
 pub mod offset_types;
 pub mod style;

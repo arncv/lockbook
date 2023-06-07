@@ -10,7 +10,7 @@ import app.lockbook.util.*
 import com.github.michaelbull.result.Err
 import kotlinx.coroutines.*
 
-class TextEditorViewModel(application: Application, val fileMetadata: File, private val text: String, textSize: Float) :
+class TextEditorViewModel(application: Application, val fileMetadata: File, private val text: String) :
     AndroidViewModel(application) {
 
     private val handler = Handler(Looper.myLooper()!!)
@@ -26,11 +26,11 @@ class TextEditorViewModel(application: Application, val fileMetadata: File, priv
     val content: LiveData<String>
         get() = _content
 
-    val markdownModel = if (fileMetadata.name.endsWith(".md")) {
-        MarkdownModel(getApplication(), textSize)
-    } else {
-        null
-    }
+//    val markdownModel = if (fileMetadata.name.endsWith(".md")) {
+//        MarkdownModel(getApplication(), textSize)
+//    } else {
+//        null
+//    }
 
     init {
         setUpTextView()

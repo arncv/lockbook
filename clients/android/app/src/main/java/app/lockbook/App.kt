@@ -26,7 +26,9 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        loadLockbookCore()
+        Timber.plant(Timber.DebugTree())
+
+        loadLibs()
 
         ProcessLifecycleOwner.get().lifecycle
             .addObserver(ForegroundBackgroundObserver(this))
@@ -38,8 +40,10 @@ class App : Application() {
         const val PERIODIC_SYNC_TAG = "periodic_sync"
     }
 
-    private fun loadLockbookCore() {
+    private fun loadLibs() {
+        System.loadLibrary("egui_editor")
         System.loadLibrary("lockbook_core_external_interface")
+
         CoreModel.init(Config(true, false, this.filesDir.absolutePath))
     }
 }

@@ -1669,10 +1669,13 @@ dependencies = [
  "egui",
  "egui_wgpu_backend",
  "image",
+ "jni 0.21.1",
  "libc",
+ "ndk-sys",
  "pollster",
  "pulldown-cmark",
  "rand 0.8.5",
+ "raw-window-handle",
  "reqwest",
  "unicode-segmentation",
 ]
