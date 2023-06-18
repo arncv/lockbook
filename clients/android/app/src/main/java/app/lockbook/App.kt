@@ -41,7 +41,6 @@ class App : Application() {
     }
 
     private fun loadLibs() {
-        System.loadLibrary("egui_editor")
         System.loadLibrary("lockbook_core_external_interface")
 
         CoreModel.init(Config(true, false, this.filesDir.absolutePath))

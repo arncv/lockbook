@@ -1,66 +1,52 @@
-use std::time::Instant;
+use crate::{wgpu, CompositeAlphaMode, Editor, WgpuEditor};
+use core::ffi::c_void;
 use egui::{Context, Visuals};
 use egui_wgpu_backend::ScreenDescriptor;
+use jni::objects::{JString, JClass};
+use jni::sys::{jfloat, jlong, jobject, jstring};
 use jni::JNIEnv;
-use jni::objects::JString;
-use jni::sys::jstring;
-
-use jni::objects::JClass;
-use jni::sys::{jint, jlong, jobject};
-use crate::{CompositeAlphaMode, Editor, wgpu, WgpuEditor};
 use raw_window_handle::{
     AndroidDisplayHandle, AndroidNdkWindowHandle, HasRawDisplayHandle, HasRawWindowHandle,
     RawDisplayHandle, RawWindowHandle,
 };
-use std::ffi::c_void;
+use std::ffi::{c_char, CStr};
+use std::time::Instant;
 
 #[no_mangle]
-pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditorKt_hello<'local>(
-    mut env: JNIEnv<'local>) -> jstring {
-
-    println!("STEP 1");
-
-    let output = env.new_string("Hello!".to_string())
-        .expect("Couldn't create java string!");
-
-    println!("STEP 2");
-
-    output.into_raw()
-}
-
-pub struct NativeWindow {
-    a_native_window: *mut ndk_sys::ANativeWindow,
-}
-
-#[no_mangle]
-pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditorKt_createWgpuCanvas(env: *mut JNIEnv, _: JClass, vulkan_surface: jobject, idx: jint) -> jlong {
-    let native_window = NativeWindow::new(env, vulkan_surface);
-
-    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_createWgpuCanvas(
+    mut env: JNIEnv, _: JClass, surface: jobject, content: JString, scale_factor: jfloat, dark_mode: bool,
+) -> jlong {
+    let native_window = NativeWindow::new(&env, surface);
+    let backends = wgpu::Backends::VULKAN;
     let instance_desc = wgpu::InstanceDescriptor { backends, ..Default::default() };
     let instance = wgpu::Instance::new(instance_desc);
     let surface = unsafe { instance.create_surface(&native_window).unwrap() };
     let (adapter, device, queue) =
         pollster::block_on(request_device(&instance, backends, &surface));
     let format = surface.get_capabilities(&adapter).formats[0];
-    let screen =
-        ScreenDescriptor { physical_width: 1000, physical_height: 1000, scale_factor: 1.0 };
-    let surface_config = wgpu::SurfaceConfiguration {
+    let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format,
-        width: native_window.get_width(), // TODO get from context or something
+        width: native_window.get_width(),
         height: native_window.get_height(),
         present_mode: wgpu::PresentMode::Fifo,
         alpha_mode: CompositeAlphaMode::Auto,
         view_formats: vec![],
     };
-    surface.configure(&device, &surface_config);
+    surface.configure(&device, &config);
     let rpass = egui_wgpu_backend::RenderPass::new(&device, format, 1);
 
     let context = Context::default();
-    context.set_visuals(Visuals::light());
+    context.set_visuals(if dark_mode { Visuals::dark() } else { Visuals::light() });
     let mut editor = Editor::default();
     editor.set_font(&context);
+
+    let content: String = match env
+        .get_string(&content) {
+        Ok(cont) => cont.into(),
+        Err(err) => format!("# The error is: {:?}", err)
+    };
+    editor.buffer = content.as_str().into();
 
     let start_time = Instant::now();
     let mut obj = WgpuEditor {
@@ -70,7 +56,11 @@ pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditorKt_createWgpuCan
         surface,
         adapter,
         rpass,
-        screen,
+        screen: ScreenDescriptor {
+            physical_width: native_window.get_width(),
+            physical_height: native_window.get_height(),
+            scale_factor,
+        },
         context,
         raw_input: Default::default(),
         from_egui: None,
@@ -84,13 +74,31 @@ pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditorKt_createWgpuCan
 }
 
 #[no_mangle]
-pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditorKt_enterFrame(_env: *mut JNIEnv, _: JClass, obj: jlong) {
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_enterFrame(
+    mut _env: JNIEnv, _: JClass, obj: jlong,
+) {
     let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
     obj.frame();
 }
 
 #[no_mangle]
-pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditorKt_dropWgpuCanvas(_env: *mut JNIEnv, _: JClass, obj: jlong) {
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_setText(
+    mut env: JNIEnv, _: JClass, obj: jlong, content: JString,
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    let content: String = match env.get_string(&content) {
+        Ok(cont) => cont.into(),
+        Err(err) => format!("# The error is: {:?}", err)
+    };
+    obj.editor.buffer = content.as_str().into();
+    obj.frame();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_dropWgpuCanvas(
+    mut _env: JNIEnv, _: JClass, obj: jlong,
+) {
     let _obj: Box<WgpuEditor> = unsafe { Box::from_raw(obj as *mut _) };
 }
 
@@ -121,10 +129,14 @@ async fn request_device(
     }
 }
 
+pub struct NativeWindow {
+    a_native_window: *mut ndk_sys::ANativeWindow,
+}
+
 impl NativeWindow {
-    fn new(env: *mut JNIEnv, surface: jobject) -> Self {
+    fn new(env: &JNIEnv, surface: jobject) -> Self {
         let a_native_window = unsafe {
-            ndk_sys::ANativeWindow_fromSurface(env as *mut _, surface as *mut _)
+            ndk_sys::ANativeWindow_fromSurface(env.get_raw() as *mut _, surface as *mut _)
         };
         Self { a_native_window }
     }
@@ -139,6 +151,14 @@ impl NativeWindow {
 
     fn get_height(&self) -> u32 {
         unsafe { ndk_sys::ANativeWindow_getHeight(self.a_native_window) as u32 }
+    }
+}
+
+impl Drop for NativeWindow {
+    fn drop(&mut self) {
+        unsafe {
+            ndk_sys::ANativeWindow_release(self.a_native_window);
+        }
     }
 }
 

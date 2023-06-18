@@ -78,6 +78,8 @@ class TextEditorFragment : Fragment() {
         model.content.observe(
             viewLifecycleOwner
         ) { content ->
+            binding.textEditorTextField.setText(content)
+
             if (name.endsWith(".md")) {
 //                model.markdownModel!!.addMarkdownEditorTheming(textField)
                 binding.markdownToolbar.visibility = View.VISIBLE
