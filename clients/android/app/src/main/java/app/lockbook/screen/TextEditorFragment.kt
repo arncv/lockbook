@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModelProvider
 import app.lockbook.R
 import app.lockbook.databinding.FragmentTextEditorBinding
 import app.lockbook.model.*
+import app.lockbook.util.MarkdownEditor
 import java.lang.ref.WeakReference
 
 class TextEditorFragment : Fragment() {
@@ -20,7 +21,6 @@ class TextEditorFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val textEditorToolbar get() = binding.textEditorToolbar
-    private val textField get() = binding.textEditorTextField
 
     private val model: TextEditorViewModel by viewModels(
         factoryProducer = {
@@ -73,20 +73,11 @@ class TextEditorFragment : Fragment() {
         }
 
         textEditorToolbar.menu?.findItem(R.id.menu_text_editor_view_md)?.isVisible = name.endsWith(".md")
-//        undoRedo.updateUndoRedoButtons()
 
         model.content.observe(
             viewLifecycleOwner
         ) { content ->
-            binding.textEditorTextField.setText(content)
-
-            if (name.endsWith(".md")) {
-//                model.markdownModel!!.addMarkdownEditorTheming(textField)
-                binding.markdownToolbar.visibility = View.VISIBLE
-            }
-
-//            textField.setText(content)
-//            undoRedo.addTextChangeListener()
+            binding.textEditorScroller.addView(MarkdownEditor(requireContext(), content))
         }
 
         model.notifyError.observe(

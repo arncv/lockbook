@@ -9,7 +9,6 @@ import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import app.lockbook.egui_editor.EGUIEditor
-import timber.log.Timber
 
 class MarkdownEditor : SurfaceView, SurfaceHolder.Callback2 {
     private var wgpuObj: Long = Long.MAX_VALUE
@@ -26,6 +25,12 @@ class MarkdownEditor : SurfaceView, SurfaceHolder.Callback2 {
         attrs,
         defStyle
     ) {
+    }
+
+    constructor(context: Context, startingContent: String) : super(
+        context,
+    ) {
+        content = startingContent
     }
 
     init {
