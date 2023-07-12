@@ -57,10 +57,10 @@ class TextEditorFragment : Fragment() {
         textEditorToolbar.title = name
         textEditorToolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.menu_text_editor_view_md -> viewMarkdown()
                 R.id.menu_text_editor_redo -> {
 //                    undoRedo.redo()
                 }
+
                 R.id.menu_text_editor_undo -> {
 //                    undoRedo.undo()
                 }
@@ -71,8 +71,6 @@ class TextEditorFragment : Fragment() {
         textEditorToolbar.setNavigationOnClickListener {
             activityModel.launchDetailScreen(null)
         }
-
-        textEditorToolbar.menu?.findItem(R.id.menu_text_editor_view_md)?.isVisible = name.endsWith(".md")
 
         model.content.observe(
             viewLifecycleOwner
@@ -86,86 +84,8 @@ class TextEditorFragment : Fragment() {
             alertModel.notifyError(error)
         }
 
-        setMarkdownButtonListeners()
 
         return binding.root
-    }
-
-    private fun setMarkdownButtonListeners() {
-        binding.menuMarkdownTitle.setOnClickListener {
-//            textField.text?.replace(textField.selectionStart, textField.selectionStart, "# ")
-        }
-
-        binding.menuMarkdownBold.setOnClickListener {
-//            val selectionStart = textField.selectionStart
-//            val selectionEnd = textField.selectionEnd
-//            if (selectionStart == selectionEnd) {
-//                textField.text?.replace(selectionStart, selectionStart, "****")
-//                textField.setSelection(selectionStart + 2)
-//            } else {
-//                textField.text?.replace(selectionStart, selectionStart, "**")
-//                val newSelectionEnd = selectionEnd + 2
-//                textField.text?.replace(newSelectionEnd, newSelectionEnd, "**")
-//                textField.setSelection(newSelectionEnd)
-//            }
-        }
-
-        binding.menuMarkdownItalics.setOnClickListener {
-//            val selectionStart = textField.selectionStart
-//            val selectionEnd = textField.selectionEnd
-//            if (selectionStart == selectionEnd) {
-//                textField.text?.replace(selectionStart, selectionStart, "__")
-//                textField.setSelection(selectionStart + 1)
-//            } else {
-//                textField.text?.replace(selectionStart, selectionStart, "_")
-//                val newSelectionEnd = selectionEnd + 1
-//                textField.text?.replace(newSelectionEnd, newSelectionEnd, "_")
-//                textField.setSelection(newSelectionEnd)
-//            }
-        }
-
-        binding.menuMarkdownImage.setOnClickListener {
-//            val selectionStart = textField.selectionStart
-//            textField.text?.replace(selectionStart, textField.selectionEnd, "![]()")
-//            textField.setSelection(selectionStart + 2)
-        }
-
-        binding.menuMarkdownLink.setOnClickListener {
-//            val selectionStart = textField.selectionStart
-//            textField.text?.replace(selectionStart, textField.selectionEnd, "[]()")
-//            textField.setSelection(selectionStart + 1)
-        }
-
-        binding.menuMarkdownCode.setOnClickListener {
-//            val selectionStart = textField.selectionStart
-//            val selectionEnd = textField.selectionEnd
-//            if (selectionStart == selectionEnd) {
-//                textField.text?.replace(selectionStart, selectionStart, "``")
-//                textField.setSelection(selectionStart + 1)
-//            } else {
-//                textField.text?.replace(selectionStart, selectionStart, "`")
-//                val newSelectionEnd = selectionEnd + 1
-//                textField.text?.replace(newSelectionEnd, newSelectionEnd, "`")
-//                textField.setSelection(newSelectionEnd)
-//            }
-        }
-    }
-
-    private fun viewMarkdown() {
-        if (binding.textEditorScroller.visibility == View.VISIBLE) {
-//            model.markdownModel!!.renderMarkdown(textField.text.toString(), binding.markdownViewer)
-            textEditorToolbar.menu?.findItem(R.id.menu_text_editor_undo)?.isVisible = false
-            textEditorToolbar.menu?.findItem(R.id.menu_text_editor_redo)?.isVisible = false
-            binding.markdownToolbar.isVisible = false
-            binding.textEditorScroller.visibility = View.GONE
-            binding.markdownViewerScroller.visibility = View.VISIBLE
-        } else {
-            binding.markdownViewerScroller.visibility = View.GONE
-            binding.textEditorScroller.visibility = View.VISIBLE
-            binding.markdownToolbar.isVisible = true
-            textEditorToolbar.menu?.findItem(R.id.menu_text_editor_undo)?.isVisible = true
-            textEditorToolbar.menu?.findItem(R.id.menu_text_editor_redo)?.isVisible = true
-        }
     }
 
     private fun isUndoEnabled(canUndo: Boolean) {
