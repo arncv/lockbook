@@ -2,7 +2,7 @@ import Foundation
 import SwiftLockbookCore
 import CLockbookCore
 
-class SearchService: ObservableObject {
+public class SearchService: ObservableObject {
     let core: LockbookApi
 
     init(_ core: LockbookApi) {

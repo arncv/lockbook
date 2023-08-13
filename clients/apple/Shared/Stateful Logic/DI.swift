@@ -66,6 +66,7 @@ extension View {
         return self
         #endif
     }
+    
     public func realDI() -> some View {
         iOSDI()
             .environmentObject(DI.coreService)
