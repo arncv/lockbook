@@ -1,5 +1,6 @@
 package app.lockbook.screen
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -14,6 +15,7 @@ import app.lockbook.R
 import app.lockbook.databinding.FragmentTextEditorBinding
 import app.lockbook.model.*
 import app.lockbook.util.MarkdownEditor
+import timber.log.Timber
 import java.lang.ref.WeakReference
 
 class TextEditorFragment : Fragment() {
@@ -36,16 +38,13 @@ class TextEditorFragment : Fragment() {
         }
     )
 
-//    private val undoRedo by lazy {
-//        EditTextModel(binding.textEditorTextField, model, ::isUndoEnabled, ::isRedoEnabled)
-//    }
-
     private val activityModel: StateViewModel by activityViewModels()
 
     private val alertModel by lazy {
         AlertModel(WeakReference(requireActivity()))
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -75,7 +74,14 @@ class TextEditorFragment : Fragment() {
         model.content.observe(
             viewLifecycleOwner
         ) { content ->
-            binding.textEditorScroller.addView(MarkdownEditor(requireContext(), content))
+            val editor = MarkdownEditor(requireContext(), content)
+//            editor.setOnTouchListener { v, event ->
+//                Timber.e("TOUCHING...")
+//                editor.onTouchEv(event)
+//
+//                false
+//            }
+            binding.textEditorScroller.addView(editor)
         }
 
         model.notifyError.observe(
@@ -86,14 +92,6 @@ class TextEditorFragment : Fragment() {
 
 
         return binding.root
-    }
-
-    private fun isUndoEnabled(canUndo: Boolean) {
-        textEditorToolbar.menu!!.findItem(R.id.menu_text_editor_undo)!!.isEnabled = canUndo
-    }
-
-    private fun isRedoEnabled(canRedo: Boolean) {
-        textEditorToolbar.menu!!.findItem(R.id.menu_text_editor_redo)!!.isEnabled = canRedo
     }
 
     fun saveOnExit() {

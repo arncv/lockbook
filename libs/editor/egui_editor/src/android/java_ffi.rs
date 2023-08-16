@@ -1,13 +1,16 @@
-use crate::{CompositeAlphaMode, Editor, wgpu, WgpuEditor};
+use crate::{CompositeAlphaMode, Editor, Pos2, wgpu, WgpuEditor};
 use crate::android::window::NativeWindow;
-use egui::{Context, Visuals};
+use egui::{Context, Event, PointerButton, TouchDeviceId, TouchId, TouchPhase, Visuals};
 use egui_wgpu_backend::ScreenDescriptor;
 use jni::objects::{JClass, JString};
-use jni::sys::{jfloat, jint, jlong, jobject, jstring};
+use jni::sys::{jboolean, jfloat, jint, jlong, jobject, jstring};
 use jni::JNIEnv;
 use std::time::Instant;
+use crate::android::keyboard::AndroidKeys;
 use crate::android::window;
+use crate::input::canonical::{Location, Modification, Region};
 use crate::input::cursor::Cursor;
+use crate::offset_types::{DocCharOffset, RangeExt};
 
 #[no_mangle]
 pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_createWgpuCanvas(
@@ -79,6 +82,18 @@ pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_enterFrame(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_resizeEditor(
+    env: JNIEnv, _: JClass, obj: jlong, surface: jobject, scale_factor: jfloat
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+    let native_window = NativeWindow::new(&env, surface);
+
+    obj.screen.physical_width = native_window.get_width();
+    obj.screen.physical_height = native_window.get_height();
+    obj.screen.scale_factor = scale_factor;
+}
+
+#[no_mangle]
 pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_setText(
     mut env: JNIEnv, _: JClass, obj: jlong, content: JString,
 ) {
@@ -101,131 +116,229 @@ pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_dropWgpuCanvas(
 
 #[no_mangle]
 pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_getTextBeforeCursor(
-    mut env: JNIEnv, _: JClass, obj: jlong, n: jint,
+    env: JNIEnv, _: JClass, obj: jlong, n: jint,
 ) -> jstring {
     let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
 
     let cursor: Cursor = (
-        obj.editor.buffer.current.cursor.selection.0.0 - n,
-        obj.editor.buffer.current.cursor.selection.0
+        obj.editor.buffer.current.cursor.selection.start() - (n as usize),
+        obj.editor.buffer.current.cursor.selection.end()
     )
         .into();
 
     let buffer = &obj.editor.buffer.current;
     let text = cursor.selection_text(buffer);
 
-    env.new_string(text)
+    env
+        .new_string(text)
         .expect("Couldn't create JString from rust string!")
-        .into_inner()
+        .into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_getTextAfterCursor(
+    env: JNIEnv, _: JClass, obj: jlong, n: jint
+) -> jstring {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    let cursor: Cursor = (
+        obj.editor.buffer.current.cursor.selection.start(),
+        obj.editor.buffer.current.cursor.selection.end() + (n as usize)
+    )
+        .into();
+
+    let buffer = &obj.editor.buffer.current;
+    let text = cursor.selection_text(buffer);
+
+    env
+        .new_string(text)
+        .expect("Couldn't create JString from rust string!")
+        .into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_getSelectedText(
+    env: JNIEnv, _: JClass, obj: jlong
+) -> jstring {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    let cursor = &obj.editor.buffer.current.cursor;
+    let selected_text = String::from(cursor.selection_text(&obj.editor.buffer.current));
+
+    env
+        .new_string(selected_text)
+        .expect("Couldn't create JString from rust string!")
+        .into_raw()
+}
+
+// #[no_mangle]
+// pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_getCursorCapsMode(
+//     env: JNIEnv, _: JClass, obj: jlong, regModes: jint
+// ) -> jstring {
+//     let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+//
+//     let cursor: Cursor = (
+//         obj.editor.buffer.current.cursor.selection.start(),
+//         obj.editor.buffer.current.cursor.selection.end() + (n as usize)
+//     )
+//         .into();
+//
+//     let buffer = &obj.editor.buffer.current;
+//     let text = cursor.selection_text(buffer);
+//
+//     env
+//         .new_string(text)
+//         .expect("Couldn't create JString from rust string!")
+//         .into_raw()
+// }
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_deleteSurroundingText(
+    _env: JNIEnv, _: JClass, obj: jlong, before_length: jint, after_length: jint
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    let current_cursor = &obj.editor.buffer.current.cursor;
+
+    obj.editor.custom_events.push(Modification::Replace {
+        region: Region::BetweenLocations {
+            start: Location::DocCharOffset(current_cursor.selection.start() + (before_length as usize)),
+            end: Location::DocCharOffset(current_cursor.selection.start())
+        },
+        text: "".to_string()
+    });
+
+    obj.editor.custom_events.push(Modification::Replace {
+        region: Region::BetweenLocations {
+            start: Location::DocCharOffset(current_cursor.selection.end() + (after_length as usize)),
+            end: Location::DocCharOffset(current_cursor.selection.end())
+        },
+        text: "".to_string()
+    });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_getAllText(
+    env: JNIEnv, _: JClass, obj: jlong
+) -> jstring {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    env
+        .new_string(&obj.editor.buffer.current.text)
+        .expect("Couldn't create JString from rust string!")
+        .into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_setSelection(
+    _env: JNIEnv, _: JClass, obj: jlong, start: jint, end: jint
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    obj.editor.custom_events.push(Modification::Select {
+        region: Region::BetweenLocations {
+            start: Location::DocCharOffset(DocCharOffset(start as usize)),
+            end: Location::DocCharOffset(DocCharOffset(end as usize))
+        }
+    });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_sendKeyEvent(
+    _env: JNIEnv, _: JClass, obj: jlong, key_code: jint, pressed: jboolean, alt: jboolean, ctrl: jboolean, shift: jboolean
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    let modifiers = egui::Modifiers {
+        alt: alt == 1,
+        ctrl: ctrl == 1,
+        shift: shift == 1,
+        mac_cmd: false,
+        command: false
+    };
+
+    obj.raw_input.modifiers = modifiers;
+
+    let Some(key) = AndroidKeys::from(key_code) else {
+        return
+    };
+
+    if let Some(key) = key.egui_key() {
+        obj.raw_input
+            .events
+            .push(Event::Key { key, pressed: pressed == 1, repeat: false, modifiers });
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_touchesBegin(
+    _env: JNIEnv, _: JClass, obj: jlong, id: jint, x: jfloat, y: jfloat, pressure: jfloat
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    println!("registering on begin: ({}, {})", x, y);
+
+    obj.raw_input.events.push(Event::Touch {
+        device_id: TouchDeviceId(0),
+        id: TouchId(id as u64),
+        phase: TouchPhase::Start,
+        pos: Pos2 { x, y },
+        force: pressure,
+    });
+
+    obj.raw_input.events.push(Event::PointerButton {
+        pos: Pos2 { x, y },
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Default::default(),
+    });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_touchesMoved(
+    _env: JNIEnv, _: JClass, obj: jlong, id: jint, x: jfloat, y: jfloat, pressure: jfloat
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    println!("registering on moved: ({}, {})", x, y);
+
+    obj.raw_input.events.push(Event::Touch {
+        device_id: TouchDeviceId(0),
+        id: TouchId(id as u64),
+        phase: TouchPhase::Move,
+        pos: Pos2 { x, y },
+        force: pressure,
+    });
+
+    obj.raw_input
+        .events
+        .push(Event::PointerMoved(Pos2 { x, y }));
+}
+
+#[no_mangle]
+pub extern "system" fn Java_app_lockbook_egui_1editor_EGUIEditor_touchesEnded(
+    _env: JNIEnv, _: JClass, obj: jlong, id: jint, x: jfloat, y: jfloat, pressure: jfloat
+) {
+    let obj = unsafe { &mut *(obj as *mut WgpuEditor) };
+
+    println!("registering on ended: ({}, {})", x, y);
+
+    obj.raw_input.events.push(Event::Touch {
+        device_id: TouchDeviceId(0),
+        id: TouchId(id as u64),
+        phase: TouchPhase::End,
+        pos: Pos2 { x, y },
+        force: pressure,
+    });
+
+    obj.raw_input.events.push(Event::PointerButton {
+        pos: Pos2 { x, y },
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Default::default(),
+    });
+
+    obj.raw_input.events.push(Event::PointerGone);
 }
 
 
-
-
-// override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence? {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun getTextAfterCursor(n: Int, flags: Int): CharSequence? {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun getSelectedText(flags: Int): CharSequence {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun getCursorCapsMode(reqModes: Int): Int {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun getExtractedText(request: ExtractedTextRequest?, flags: Int): ExtractedText {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun setComposingRegion(start: Int, end: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun finishComposingText(): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun commitCompletion(text: CompletionInfo?): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun commitCorrection(correctionInfo: CorrectionInfo?): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun setSelection(start: Int, end: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun performEditorAction(editorAction: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun performContextMenuAction(id: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun beginBatchEdit(): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun endBatchEdit(): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun sendKeyEvent(event: KeyEvent?): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun clearMetaKeyStates(states: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun reportFullscreenMode(enabled: Boolean): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun performPrivateCommand(action: String?, data: Bundle?): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun requestCursorUpdates(cursorUpdateMode: Int): Boolean {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun getHandler(): Handler {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun closeConnection() {
-//         TODO("Not yet implemented")
-//     }
-//
-//     override fun commitContent(
-//         inputContentInfo: InputContentInfo,
-//         flags: Int,
-//         opts: Bundle?
-//     ): Boolean {
-//         TODO("Not yet implemented")
-//     }

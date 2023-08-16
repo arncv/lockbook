@@ -389,6 +389,9 @@ public class iOSMTK: MTKView, MTKViewDelegate, UITextInput, UIEditMenuInteractio
         let point = Unmanaged.passUnretained(touches.first!).toOpaque()
         let value = UInt64(UInt(bitPattern: point))
         let location = touches.first!.location(in: self)
+        
+        print("press at \(location.x) \(location.y)")
+        
         touches_began(editorHandle, value, Float(location.x), Float(location.y), Float(touches.first?.force ?? 0))
 
         self.setNeedsDisplay(self.frame)
