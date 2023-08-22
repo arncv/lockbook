@@ -100,4 +100,6 @@ class TextEditorFragment : Fragment() {
 //            activityModel.saveTextOnExit(model.fileMetadata.id, textField.text.toString())
         }
     }
+
+
 }

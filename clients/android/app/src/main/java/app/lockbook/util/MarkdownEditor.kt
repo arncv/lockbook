@@ -5,17 +5,15 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.PixelFormat
+import android.inputmethodservice.InputMethodService
 import android.os.Bundle
 import android.os.Handler
 import android.text.InputType
 import android.util.AttributeSet
-import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.view.View
-import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.CompletionInfo
 import android.view.inputmethod.CorrectionInfo
 import android.view.inputmethod.EditorInfo
@@ -63,6 +61,8 @@ class MarkdownEditor : SurfaceView, SurfaceHolder.Callback2 {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent?): Boolean {
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY);
+
         println("touching...")
         if(event != null) {
             Timber.e("touch event registered: (${event.rawX}, ${event.rawY}) (${event.x}, ${event.y}) (${adjustTouchPoint(event.x)}, ${adjustTouchPoint(event.y)} (scale: ${context.resources.displayMetrics.scaledDensity})")
@@ -80,7 +80,7 @@ class MarkdownEditor : SurfaceView, SurfaceHolder.Callback2 {
             }
         }
 
-        return false
+        return true
     }
 
 
@@ -92,6 +92,10 @@ class MarkdownEditor : SurfaceView, SurfaceHolder.Callback2 {
             wgpuObj = eguiEditor.createWgpuCanvas(h.surface, content, context.resources.displayMetrics.scaledDensity, (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES)
             setWillNotDraw(false)
         }
+
+        setFocusable(true)
+        setFocusableInTouchMode(true)
+
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -119,7 +123,13 @@ class MarkdownEditor : SurfaceView, SurfaceHolder.Callback2 {
     }
 
     override fun onCreateInputConnection(outAttrs: EditorInfo?): InputConnection {
+        Timber.e("creating input connection")
         return inputManager
+    }
+
+    override fun onCheckIsTextEditor(): Boolean {
+        Timber.e("checking if text editor...")
+        return true
     }
 }
 
@@ -136,8 +146,6 @@ data class ComposingRange(
 
 
 class EGUIInputManager(val eguiEditor: EGUIEditor, val wgpuObj: Long): InputConnection {
-    private val composingRange = ComposingRange()
-
     var stopEditsAndDisplay = false
 
     override fun getTextBeforeCursor(n: Int, flags: Int): CharSequence? {
@@ -259,7 +267,7 @@ class EGUIInputManager(val eguiEditor: EGUIEditor, val wgpuObj: Long): InputConn
 
     // not necessarily required
     override fun requestCursorUpdates(cursorUpdateMode: Int): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
     // not necessarily required
